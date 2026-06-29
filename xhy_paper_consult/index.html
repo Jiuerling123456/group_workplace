@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>论文查询系统</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f0f2f5;min-height:100vh}
+.app{max-width:800px;margin:0 auto;padding:24px 20px 60px}
+.header{text-align:center;padding:32px 0 24px}
+.header h1{font-size:26px;color:#1a1a2e;margin-bottom:6px}
+.header .sub{color:#8b8fa3;font-size:13px}
+.search-card{background:#fff;border-radius:14px;padding:20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-bottom:16px}
+.search-row{display:flex;gap:10px}
+.search-row input{flex:1;padding:12px 16px;border:2px solid #e8ecf1;border-radius:10px;font-size:15px;outline:none;transition:border-color .2s}
+.search-row input:focus{border-color:#4f46e5}
+.search-row button{padding:12px 24px;background:#4f46e5;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;white-space:nowrap;transition:background .2s;display:flex;align-items:center;gap:6px}
+.search-row button:hover{background:#4338ca}
+.search-row button:disabled{background:#a5b4fc;cursor:not-allowed}
+.tags{margin-top:10px;display:flex;gap:6px;flex-wrap:wrap}
+.tags .tag{font-size:12px;padding:4px 10px;background:#eef2ff;color:#4f46e5;border-radius:6px;cursor:pointer;transition:background .2s;border:1px solid transparent}
+.tags .tag:hover{background:#e0e7ff;border-color:#4f46e5}
+/* 结果卡片 */
+#resultBox{background:#fff;border-radius:14px;padding:24px;box-shadow:0 1px 4px rgba(0,0,0,.06);min-height:100px}
+.placeholder{color:#a5a9b6;text-align:center;padding:48px 0;font-size:14px}
+.placeholder svg{display:block;margin:0 auto 12px;opacity:.4}
+.loading{display:flex;align-items:center;justify-content:center;gap:12px;padding:32px 0;color:#6b7280;font-size:14px}
+.spinner{width:22px;height:22px;border:2.5px solid #e5e7eb;border-top-color:#4f46e5;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.elapsed{font-size:12px;color:#9ca3af;margin-left:4px}
+.result-info{padding-bottom:12px;margin-bottom:16px;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center}
+.result-info .count{font-size:14px;color:#374151;font-weight:500}
+.result-info .time{font-size:12px;color:#9ca3af}
+.paper-item{display:flex;gap:14px;padding:18px 0;border-bottom:1px solid #f3f4f6}
+.paper-item:last-child{border-bottom:none}
+.paper-num{width:34px;height:34px;background:#eef2ff;color:#4f46e5;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0}
+.paper-info{flex:1;min-width:0}
+.paper-title{font-size:16px;font-weight:600;color:#111827;line-height:1.45;margin-bottom:8px}
+.paper-meta{display:flex;flex-wrap:wrap;gap:8px 14px;margin-bottom:8px;font-size:12px;color:#6b7280}
+.paper-meta em{font-style:normal;color:#9ca3af}
+.paper-abstract{font-size:13px;color:#4b5563;line-height:1.65;margin-bottom:8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+.paper-abstract.expanded{-webkit-line-clamp:unset;overflow:visible}
+.paper-tags{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.paper-tag{font-size:11px;padding:2px 8px;background:#f3f4f6;color:#6b7280;border-radius:4px}
+.paper-actions{display:flex;gap:8px}
+.paper-actions a,.paper-actions button{font-size:11px;padding:4px 10px;border-radius:5px;text-decoration:none;border:1px solid #d1d5db;background:#fff;color:#4f46e5;cursor:pointer;transition:all .15s}
+.paper-actions a:hover,.paper-actions button:hover{background:#eef2ff;border-color:#4f46e5}
+.error-box{background:#fef2f2;color:#dc2626;padding:14px 18px;border-radius:10px;font-size:14px;line-height:1.6}
+.no-result{color:#9ca3af;text-align:center;padding:32px 0;font-size:14px}
+/* 历史记录 */
+.history-card{background:#fff;border-radius:14px;padding:16px 20px;box-shadow:0 1px 4px rgba(0,0,0,.06);margin-top:16px}
+.history-card h3{font-size:14px;color:#6b7280;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.history-list{display:flex;flex-wrap:wrap;gap:8px}
+.history-item{font-size:12px;padding:5px 12px;background:#f9fafb;color:#4b5563;border-radius:6px;cursor:pointer;transition:all .15s;border:1px solid transparent;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history-item:hover{background:#eef2ff;color:#4f46e5;border-color:#4f46e5}
+.history-item .del{display:inline-block;margin-left:6px;opacity:.4;font-size:10px;transition:opacity .15s}
+.history-item:hover .del{opacity:1}
+.history-actions{margin-top:10px;display:flex;gap:8px}
+.history-actions button{font-size:11px;padding:4px 10px;border:1px solid #e5e7eb;background:#fff;border-radius:5px;color:#6b7280;cursor:pointer;transition:all .15s}
+.history-actions button:hover{background:#fef2f2;color:#dc2626;border-color:#fecaca}
+.export-btn{font-size:12px;padding:6px 12px;background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;border-radius:6px;cursor:pointer;transition:all .15s}
+.export-btn:hover{background:#dcfce7}
+.btn-row{display:flex;gap:8px;margin-top:16px}
+/* 响应式 */
+@media(max-width:600px){
+  .app{padding:16px 12px 40px}
+  .header{padding:20px 0 16px}
+  .header h1{font-size:22px}
+  .search-row{flex-direction:column}
+  .paper-item{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>📄 论文查询系统</h1>
+    <p class="sub">输入关键词，AI 帮您检索相关学术论文</p>
+  </div>
+
+  <div class="search-card">
+    <div class="search-row">
+      <input type="text" id="kw" placeholder="输入论文关键词，如：transformer、neural network..." autofocus />
+      <button id="btn" onclick="search()"><span>🔍</span> 查询</button>
+    </div>
+    <div class="tags" id="suggestTags">
+      <span class="tag" onclick="searchTag('transformer')">transformer</span>
+      <span class="tag" onclick="searchTag('attention mechanism')">attention mechanism</span>
+      <span class="tag" onclick="searchTag('neural network')">neural network</span>
+      <span class="tag" onclick="searchTag('large language model')">large language model</span>
+      <span class="tag" onclick="searchTag('computer vision')">computer vision</span>
+    </div>
+  </div>
+
+  <div id="resultBox"><div class="placeholder"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#a5a9b6" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>输入关键词后点击"查询"开始搜索</div></div>
+
+  <div class="history-card" id="historyCard" style="display:none">
+    <h3>📋 搜索历史</h3>
+    <div class="history-list" id="historyList"></div>
+    <div class="history-actions"><button id="clearHistory" onclick="clearHistory()">清空历史</button></div>
+  </div>
+
+  <div id="exportArea" style="display:none"></div>
+</div>
+
+<script>
+const PROXY = '/api/proxy';
+let searchStart = 0;
+
+async function search(kw) {
+  const keyword = kw || document.getElementById('kw').value.trim();
+  if (!keyword) { alert('请输入关键词'); return; }
+
+  const box = document.getElementById('resultBox');
+  const btn = document.getElementById('btn');
+  searchStart = Date.now();
+
+  box.innerHTML = '<div class="loading"><span class="spinner"></span>正在查询<span class="elapsed" id="tick">(0s)</span></div>';
+  btn.disabled = true;
+
+  // 计时器
+  const ticker = setInterval(() => {
+    const el = document.getElementById('tick');
+    if (el) el.textContent = '(' + Math.floor((Date.now() - searchStart) / 1000) + 's)';
+  }, 1000);
+
+  try {
+    const resp = await fetch(PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        inputs: { keywords: keyword },
+        response_mode: 'streaming',
+        user: 'paper-' + Date.now(),
+      }),
+    });
+
+    clearInterval(ticker);
+    if (!resp.ok) {
+      const txt = await resp.text();
+      let msg = 'HTTP ' + resp.status;
+      try { msg = JSON.parse(txt).message || msg; } catch(e) {}
+      throw new Error(msg);
+    }
+
+    const data = await resp.json();
+    const results = data.results || [];
+    const elapsed = ((Date.now() - searchStart) / 1000).toFixed(1);
+
+    if (results.length === 0) {
+      box.innerHTML = '<div class="no-result">📭 未找到相关论文，请尝试其他关键词</div>';
+    } else {
+      renderResults(results, elapsed);
+    }
+
+    saveHistory(keyword);
+  } catch (e) {
+    clearInterval(ticker);
+    box.innerHTML = '<div class="error-box">❌ ' + escapeHtml(e.message) + '<br><small>请检查网络或稍后重试</small></div>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderResults(results, elapsed) {
+  const box = document.getElementById('resultBox');
+  let html = '<div class="result-info"><span class="count">📚 找到 <strong>' + results.length + '</strong> 篇相关论文</span><span class="time">⏱ ' + elapsed + 's</span></div>';
+
+  results.forEach((r, i) => {
+    let body = '';
+    if (typeof r === 'string') {
+      body = '<div class="paper-info"><div class="paper-title">结果 #' + (i+1) + '</div><div class="paper-abstract" onclick="this.classList.toggle(\'expanded\')">' + escapeHtml(r) + '</div></div>';
+    } else if (r && typeof r === 'object') {
+      const title = r.title || r.name || '';
+      const authors = r.authors || r.author || '';
+      const year = r.year || r.date || '';
+      const journal = r.journal || r.venue || r.source || '';
+      const abstract = r.abstract || r.summary || r.description || '';
+      const url = r.url || r.link || r.doi || '';
+      const keywords = r.keywords || [];
+      const rawText = (!title && !abstract) ? (r.text || r.content || '') : '';
+
+      body = '<div class="paper-info">';
+      if (title) body += '<div class="paper-title">' + escapeHtml(title) + '</div>';
+      if (authors || year || journal) {
+        body += '<div class="paper-meta">';
+        if (authors) body += '<span>👤 ' + escapeHtml(Array.isArray(authors) ? authors.join(', ') : String(authors)) + '</span>';
+        if (year) body += '<span>📅 ' + escapeHtml(String(year)) + '</span>';
+        if (journal) body += '<span>📰 ' + escapeHtml(journal) + '</span>';
+        body += '</div>';
+      }
+      if (abstract) body += '<div class="paper-abstract" onclick="this.classList.toggle(\'expanded\')">' + escapeHtml(abstract) + '</div>';
+      if (rawText) body += '<div class="paper-abstract">' + escapeHtml(rawText) + '</div>';
+      if (keywords.length) body += '<div class="paper-tags">' + keywords.map(k => '<span class="paper-tag">' + escapeHtml(k) + '</span>').join('') + '</div>';
+      body += '<div class="paper-actions">';
+      if (url) body += '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener">🔗 原文链接</a>';
+      body += '<button onclick="copyPaper(this,' + i + ')">📋 复制</button>';
+      body += '</div></div>';
+    } else {
+      body = '<div class="paper-info"><div class="paper-abstract">' + escapeHtml(String(r)) + '</div></div>';
+    }
+    html += '<div class="paper-item"><div class="paper-num">' + (i+1) + '</div>' + body + '</div>';
+  });
+
+  // 导出按钮
+  html += '<div class="btn-row"><button class="export-btn" onclick="exportPapers()">📥 导出结果</button></div>';
+  box.innerHTML = html;
+
+  // 存当前结果到全局
+  window._lastResults = results;
+  window._lastKeyword = document.getElementById('kw').value.trim();
+}
+
+function copyPaper(btn, idx) {
+  const item = btn.closest('.paper-item');
+  const text = item ? item.textContent.trim() : '';
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✅ 已复制';
+    setTimeout(() => btn.textContent = '📋 复制', 1500);
+  });
+}
+
+function exportPapers() {
+  if (!window._lastResults || !window._lastResults.length) return;
+  const kw = window._lastKeyword || 'papers';
+  let text = '论文查询结果 - 关键词: ' + kw + '\n' + '='.repeat(60) + '\n\n';
+  window._lastResults.forEach((r, i) => {
+    text += '【' + (i+1) + '】';
+    if (typeof r === 'string') { text += r + '\n\n'; return; }
+    if (r && typeof r === 'object') {
+      if (r.title) text += r.title + '\n';
+      if (r.authors) text += '作者: ' + (Array.isArray(r.authors) ? r.authors.join(', ') : r.authors) + '\n';
+      if (r.year) text += '年份: ' + r.year + '\n';
+      if (r.journal) text += '期刊: ' + r.journal + '\n';
+      if (r.abstract) text += '摘要: ' + r.abstract + '\n';
+      if (r.url) text += '链接: ' + r.url + '\n';
+      text += '\n';
+    }
+  });
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = kw.replace(/\s+/g, '_') + '_papers.txt';
+  a.click();
+}
+
+function searchTag(tag) {
+  document.getElementById('kw').value = tag;
+  search(tag);
+}
+
+// 历史记录
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem('paperSearchHistory') || '[]'); } catch(e) { return []; }
+}
+function saveHistory(kw) {
+  let h = loadHistory();
+  h = [kw, ...h.filter(x => x !== kw)].slice(0, 20);
+  localStorage.setItem('paperSearchHistory', JSON.stringify(h));
+  renderHistory();
+}
+function clearHistory() {
+  localStorage.removeItem('paperSearchHistory');
+  renderHistory();
+}
+function renderHistory() {
+  const h = loadHistory();
+  const card = document.getElementById('historyCard');
+  const list = document.getElementById('historyList');
+  if (h.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  list.innerHTML = h.map((kw, i) =>
+    '<span class="history-item" onclick="historyClick(\'' + escapeHtml(kw).replace(/'/g, "\\'") + '\')">' +
+    escapeHtml(kw) + '<span class="del" onclick="event.stopPropagation();delHistory(' + i + ')">✕</span></span>'
+  ).join('');
+}
+function historyClick(kw) {
+  document.getElementById('kw').value = kw;
+  search(kw);
+}
+function delHistory(idx) {
+  let h = loadHistory();
+  h.splice(idx, 1);
+  localStorage.setItem('paperSearchHistory', JSON.stringify(h));
+  renderHistory();
+}
+
+function escapeHtml(t) {
+  const d = document.createElement('div');
+  d.textContent = t;
+  return d.innerHTML;
+}
+
+document.getElementById('kw').addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+renderHistory();
+</script>
+</body>
+</html>
