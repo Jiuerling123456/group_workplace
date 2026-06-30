@@ -1,0 +1,15 @@
+{
+  "name": "xhy-paper-consult",
+  "version": "1.0.0",
+  "description": "AI 论文查询系统 - 基于 Dify Workflow API",
+  "main": "index.html",
+  "scripts": {
+    "dev": "vercel dev",
+    "start": "npx serve ."
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.x"
+  }
+}

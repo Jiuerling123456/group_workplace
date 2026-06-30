@@ -10,7 +10,8 @@ API_KEY = 'app-r2ny0MjklS9YYhBRvN80j3S9'
 
 class ProxyHandler(http.server.BaseHTTPRequestHandler):
     def do_POST(self):
-        if self.path != '/api/proxy':
+        # 支持两种路径：兼容旧版 /api/proxy 和 Vercel 风格 /api/paper-proxy
+        if self.path not in ['/api/proxy', '/api/paper-proxy']:
             self.send_error(404)
             return
 
