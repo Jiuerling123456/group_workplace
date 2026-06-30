@@ -1,9 +1,9 @@
 /**
  * Vercel Serverless Function - Dify API 代理
- * 
+ *
  * 解决 Vercel 静态托管下 /proxy/* 请求的转发问题。
  * 通过 vercel.json rewrite 将 /proxy/* 映射到此函数。
- * 
+ *
  * 需在 Vercel 环境变量中配置：
  *   DIFY_API_KEY  - 你的 Dify API Key（必需）
  *   DIFY_API_BASE - Dify API 地址（可选，默认 https://api.dify.ai/v1）
@@ -25,24 +25,33 @@ export default async function handler(req, res) {
 
   const apiBase = process.env.DIFY_API_BASE || 'https://api.dify.ai/v1';
 
-  // 从 rewrite 规则中获取原始路径
-  const difyPath = req.query.dify_path || '';
+  /**
+   * 核心修复：直接从 req.url 提取路径
+   *
+   * Vercel rewrite 后 req.url 仍是原始 URL，如：
+   *   /proxy/chat-messages?user=abc123
+   *
+   * 而不是 rewrite 目标 /api/proxy?... ，因此不能依赖 req.query。
+   */
+  const parsedUrl = new URL(req.url, 'http://localhost');
+  // 去掉 /proxy 前缀，拼接后续路径 + 查询字符串
+  const difyPath = parsedUrl.pathname.replace(/^\/proxy/, '');
+  const targetUrl = `${apiBase}${difyPath}${parsedUrl.search}`;
 
-  // 重构查询参数（排除 dify_path）
-  const url = new URL(req.url, 'http://localhost');
-  url.searchParams.delete('dify_path');
-  const queryString = url.search;
+  console.log(`[Proxy] ${req.method} ${req.url} -> ${targetUrl}`);
 
-  const targetUrl = `${apiBase}/${difyPath}${queryString}`;
-
-  // 读取请求体
-  let body = '';
+  // 读取请求体（仅非 GET/HEAD 请求）
+  let body = undefined;
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    const chunks = [];
-    for await (const chunk of req) {
-      chunks.push(chunk);
+    try {
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      body = Buffer.concat(chunks).toString();
+    } catch (e) {
+      body = '';
     }
-    body = Buffer.concat(chunks).toString();
   }
 
   try {
@@ -51,19 +60,43 @@ export default async function handler(req, res) {
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
-        'User-Agent': 'Vercel-Dify-Proxy/1.0',
+        'User-Agent': 'Vercel-Dify-Proxy/2.0',
       },
       body: body || undefined,
-      signal: AbortSignal.timeout(120000), // 2 分钟超时
+      signal: AbortSignal.timeout(120000),
     });
 
     const contentType = fetchResp.headers.get('content-type') || 'application/json';
-    const responseBody = await fetchResp.text();
 
+    // 对于流式 SSE 响应，直接转发
+    if (contentType.includes('text/event-stream')) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('X-Accel-Buffering', 'no');
+      res.status(200);
+
+      const reader = fetchResp.body.getReader();
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(decoder.decode(value, { stream: true }));
+        }
+      } catch (e) {
+        console.error('[Proxy] SSE stream error:', e.message);
+      }
+      return res.end();
+    }
+
+    // 普通 JSON 响应
+    const responseBody = await fetchResp.text();
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Content-Type', contentType);
     return res.status(fetchResp.status).send(responseBody);
   } catch (error) {
+    console.error('[Proxy] Error:', error.message);
     res.setHeader('Access-Control-Allow-Origin', '*');
     if (error.name === 'TimeoutError' || error.name === 'AbortError') {
       return res.status(504).json({ error: 'Dify API 请求超时' });
